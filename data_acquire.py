@@ -8,6 +8,7 @@ import requests
 import numpy as np
 import pandas as pd
 import logging
+import time
 from datetime import timedelta, datetime
 from dateutil import rrule
 from functools import lru_cache
@@ -24,8 +25,8 @@ POWER_DATA_URL = "https://transmission.bpa.gov/Business/Operations/Wind/twndbspt
 
 WEATHER_DATA_URL = "https://nomads.ncep.noaa.gov/dods/gfs_0p25_1hr/gfs{}/gfs_0p25_1hr_{:02d}z"
 
-HEIGHT_VEL = np.array([10, 100]) #[10, 20, 30, 40, 50, 80, 100])
-HEIGHT_T = np.array([2, 100]) #[2, 80, 100])
+HEIGHT_VEL = np.array([10, 20, 30, 40, 50, 80, 100])
+HEIGHT_T = np.array([2, 80, 100])
 
 LON_MIN = 360. - 125.
 LON_MAX = 360. - 115.
@@ -48,6 +49,9 @@ def _download_turbine_data():
 
     # Convert the turbine longitude data to be in [0, 360]
     turbine_data["xlong"] = 360. + turbine_data["xlong"]
+
+    # Save the turbine data to disk
+    turbine_data.to_csv("turbine_metadata.csv")
 
     # Return the turbine metadata
     return turbine_data
@@ -95,6 +99,7 @@ def _download_weather_data(date, hr_base):
         return None
 
 
+@lru_cache(maxsize=128)
 def _get_weather_data(date, hr, hr_base):
     """Get the weather data for a specific day and hour"""
     # Download the raw data frorm the GFS system in NetCDF4 format
@@ -102,6 +107,7 @@ def _get_weather_data(date, hr, hr_base):
 
     # Check if the data was downloaded correctly
     if weather_data is None:
+        _download_weather_data.cache_clear()
         return None
 
     # Get the variables from the weather data
@@ -175,6 +181,9 @@ class DataAcquirer:
         end_date = datetime.utcnow().date()
         self._acquire_date_range(start_date, end_date)
 
+        # Begin the incremental download loop
+        self._incremental_acquisition_loop()
+
     def _download_and_process_data(self, date_time, hr, hr_base):
         """Downloads and processes a single dataset"""
         # Determine the date and time of the data
@@ -189,10 +198,12 @@ class DataAcquirer:
 
         # Check if the data was successfully downloaded
         if data is None:
+            _get_weather_data.cache_clear()
             return False
 
         # Upsert the weather data
-        self.mongodb_interface.upsert_weather_data(date_data, data)
+        if not self.mongodb_interface.upsert_weather_data(date_data, data):
+            return False
 
         # Allocate a dictionary for the interpolated data
         data_interp = {}
@@ -206,8 +217,9 @@ class DataAcquirer:
         data_interp["power"] = _get_power_data(date_data)
 
         # Upsert the interpolated data
-        self.mongodb_interface.upsert_turbine_weather_data(date_data, data_interp,
-                                                           self.turbine_data)
+        if not self.mongodb_interface.upsert_turbine_weather_data(date_data, data_interp,
+                                                                  self.turbine_data):
+            return False
 
         # Return True to indicate success
         return True
@@ -224,10 +236,23 @@ class DataAcquirer:
                     if not self._download_and_process_data(date_time, hr, hr_base):
                         break
 
+    def _incremental_acquisition_loop(self, hrs_wait=1):
+        """Infinte loop that incrementally downloads and processes new data"""
+        while True:
+            # Attempt to download all the data for today
+            logger.info("performing incremental download...")
+            self._acquire_date_range(datetime.utcnow().date(),
+                                     datetime.utcnow().date() + timedelta(days=1),
+                                     hrs_from_sim=24)
+
+            # Wait and try again
+            logger.info("waiting {} hour(s) until next incremental download...".format(hrs_wait))
+            time.sleep(hrs_wait * 3600)
+
 
 def main():
     """Main program execution"""
-    data_acquirer = DataAcquirer(turbine_data_file="turbine_metadata.csv", initial_days=1)
+    DataAcquirer(turbine_data_file="turbine_metadata.csv")
 
 
 if __name__ == "__main__":
