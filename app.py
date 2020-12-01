@@ -15,6 +15,7 @@ import dash_html_components as html
 import matplotlib.pyplot as plt
 
 from database import MongoDBInterface
+from predict import linear_model
 
 mongodb_interface = MongoDBInterface()
 
@@ -173,6 +174,18 @@ def power_figure():
             name="90% IQR for Wind Speed",
             hoverinfo="skip"),
         secondary_y=True)
+
+    # Fit a linear model and predict the power
+    t_test, y_test, t_new, y_new = linear_model(data)
+
+    # Plot the linear model test results
+    fig.add_trace(
+        go.Scatter(
+            x=t_test + t_new,
+            y=np.hstack((y_test, y_new)),
+            line_color='red',
+            name='Polynomial Regression',
+            hoverinfo="skip"))
 
     # Set the layout parameters of the figure
     fig.update_layout(
