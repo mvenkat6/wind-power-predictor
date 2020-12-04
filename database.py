@@ -11,7 +11,7 @@ import logging
 
 import utils
 
-ATLS_STR = "mongodb+srv://dash-app:wind-power@wind-power-predictor.yzev6.mongodb.net/<dbname>?retryWrites=true&w=majority"
+ATLAS_STR = "mongodb+srv://dash-app:wind-power@wind-power-predictor.yzev6.mongodb.net/<dbname>?retryWrites=true&w=majority"
 
 
 # Start logger
