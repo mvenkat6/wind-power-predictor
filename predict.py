@@ -6,7 +6,7 @@ __author__ = "Maitreya Venkataswamy"
 
 import numpy as np
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.feature_selection import f_regression, SelectKBest
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import Ridge
@@ -56,7 +56,6 @@ def linear_model(data):
     # Prepare the data for the sklearn workflow
     t_learn, t_new, X_learn, y_learn, X_new = _prepare_data(data)
 
-
     # Split the training data into a trianing set and a test set
     X_train, X_test, y_train, y_test, t_train, t_test = train_test_split(X_learn, y_learn, t_learn,
                                                                     test_size=1/6, shuffle=False)
@@ -65,10 +64,16 @@ def linear_model(data):
     model = Pipeline([("skb", SelectKBest(f_regression, k=200)),
                       ("pf", PolynomialFeatures(degree=2)),
                       ("ss", StandardScaler()),
-                      ("ridge", Ridge(alpha=100, random_state=0))])
+                      ("gs", GridSearchCV(
+                            Ridge(random_state=0),
+                            param_grid={"alpha": np.logspace(-8, 0, 20)},
+                            cv=KFold(n_splits=5)))])
 
     # Fit the model
     model.fit(X_train, y_train)
+
+    # Print the model hyperparameters for debugging
+    print("Best parameters: ", model.named_steps.gs.best_params_)
 
     # Return the model predictions
     return t_test, model.predict(X_test), t_new, \

@@ -28,10 +28,10 @@ WEATHER_DATA_URL = "https://nomads.ncep.noaa.gov/dods/gfs_0p25_1hr/gfs{}/gfs_0p2
 HEIGHT_VEL = np.array([10, 20, 30, 40, 50, 80, 100])
 HEIGHT_T = np.array([2, 80, 100])
 
-LON_MIN = 360. - 125.
-LON_MAX = 360. - 115.
-LAT_MIN = 40.
-LAT_MAX = 50.
+LON_MIN = 360. - 135.
+LON_MAX = 360. - 105.
+LAT_MIN = 35.
+LAT_MAX = 55.
 
 
 # Start logger
@@ -224,7 +224,7 @@ class DataAcquirer:
         # Return True to indicate success
         return True
 
-    def _acquire_date_range(self, start_date, end_date, hrs_from_sim=12):
+    def _acquire_date_range(self, start_date, end_date, hrs_from_sim=24):
         """Downloads and processes data in a date range"""
         # Iterate over the days in the range
         for date_time in rrule.rrule(rrule.DAILY, dtstart=start_date, until=end_date):

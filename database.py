@@ -99,7 +99,7 @@ class MongoDBInterface:
                           {"time": {"$lt": end_date_time}}]}
 
         # Query the database and parse the results
-        for record in self.db["turbine_weather"].find(query).sort("time"):
+        for record in self.db["turbine_weather"].find(query):
             # Allocate a dictionary for the single record
             rec = {}
 
@@ -115,6 +115,9 @@ class MongoDBInterface:
             # Add the parsed record to the data list
             data.append(rec)
 
+        # Sort the records
+        data.sort(key=lambda rec: rec["time"])
+
         # Return the data
         return data
 
@@ -128,7 +131,7 @@ class MongoDBInterface:
                           {"time": {"$lt": end_date_time}}]}
 
         # Query the database and parse the results
-        for record in self.db["weather"].find(query).sort("time"):
+        for record in self.db["weather"].find(query):
             # Allocate a dictionary for the single record
             rec = {}
 
@@ -142,6 +145,9 @@ class MongoDBInterface:
 
             # Add the parsed record to the data list
             data.append(rec)
+
+        # Sort the records
+        data.sort(key=lambda rec: rec["time"])
 
         # Return the data
         return data
