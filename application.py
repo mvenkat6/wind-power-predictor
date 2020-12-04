@@ -21,7 +21,7 @@ mongodb_interface = MongoDBInterface()
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css', '/assets/style.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-
+application = app.server
 
 def map_figure():
     """Creates a map figure that shows the wind patterns"""
@@ -310,16 +310,13 @@ def serve_layout():
         ], className='row', id='content')
 
 
+app.layout = serve_layout
+
+
 def main():
     """Main program execution"""
-    # Set the layout server of the application
-    app.layout = serve_layout
-
-    # Start the data acquisition program
-    Popen(['python', 'data_acquire.py'])
-
     # Run the application
-    app.run_server()
+    application.run(port=8080)
 
 
 if __name__ == "__main__":
