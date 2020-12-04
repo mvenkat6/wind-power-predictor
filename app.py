@@ -12,7 +12,7 @@ from plotly.subplots import make_subplots
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-import matplotlib.pyplot as plt
+from subprocess import Popen
 
 from database import MongoDBInterface
 from predict import linear_model
@@ -39,13 +39,6 @@ def map_figure():
     w_data = mongodb_interface.fetch_weather_data(datetime.utcnow() - timedelta(days=7),
                                                   datetime.utcnow() + timedelta(days=1))
 
-    # Get the wind data on a coarser grid
-    skp = 16
-    u = [d["u"][15:-5:skp, ::skp, 0] for d in w_data]
-    v = [d["v"][15:-5:skp, ::skp, 0] for d in w_data]
-    x_lon = w_data[0]["lon"][::skp]
-    y_lat = w_data[0]["lat"][15:-5:skp]
-
     # Load the turbine metadata data
     turbine_data = pd.read_csv("turbine_metadata.csv", index_col=0)
 
@@ -53,26 +46,16 @@ def map_figure():
     fig = go.Figure()
 
     # Add data to the plot for multiple points in time
-    freq = 24
+    freq = 6
     for i in range(0, vel.shape[0], freq):
-        # Compute the streamlines
-        sp = plt.streamplot(x_lon, y_lat, u[i], v[i], density=2)
-        lines = sp.lines
-
-        # Combine the streamlines into a single list for plotting
-        pts = []
-        for pt in lines.get_segments():
-            pts.append(pt)
-            pts.append(np.array([np.nan, np.nan]))
-        pts = np.vstack(pts)
-
         # Add the streamlines
         fig.add_trace(
             go.Scattermapbox(
                 visible=False,
-                lon=pts[:, 0],
-                lat=pts[:, 1],
-                mode="lines+markers",
+                lon=w_data[i]["pts"][:, 0],
+                lat=w_data[i]["pts"][:, 1],
+                mode="lines",
+                line={"color": "purple"},
                 showlegend=False,
                 hoverinfo="skip"
             )
@@ -91,10 +74,10 @@ def map_figure():
                     sizeref=1e2,
                     color=vel[i, :],
                     showscale=True,
-                    colorscale="speed",
+                    colorscale="Teal",
                     colorbar=dict(),
                     cmin=0,
-                    cmax=20),
+                    cmax=15),
                 showlegend=False,
                 hovertemplate="Rated Power Capacity: %{marker.size:,} kW<br>Turbine Hub Height: %{customdata}<extra></extra>"))
 
@@ -201,7 +184,7 @@ def power_figure():
     fig.add_trace(
         go.Scatter(
             x=t_test + t_new,
-            y=np.clip(np.hstack((y_test, y_new)), 0., np.inf),
+            y=np.clip(np.hstack((y_test, y_new)), 0., np.inf) if y_new is not None else np.clip(y_test, 0, np.inf),
             line_color='red',
             name='Polynomial Regression',
             hoverinfo="skip"))
@@ -246,14 +229,14 @@ def description():
     """Returns project desription text"""
     return html.Div(children=[dcc.Markdown('''
         # Predicting Pacific Northwest Wind Power Using Weather Simulations
-        Wind power is increasingly becoming more popular as a renewable energy source, however the generation of wind power is not the most stable source of power we don’t have 100% control over the availability of the power generation at an arbitrary time-scale. Ultimately, the availability of wind power is of course dependent on weather conditions. The good news is that weather forecasting is becoming a mature field of research. Huge increases in the availability of computational resources have allowed the generation of CFD based weather forecasts by harnessing supercomputers to perform simulations of the Earth’s atmosphere and weather at a global scale with extremely fine resolution. This project aims to demonstrate the ability to use these weather forecasts to predict the availability of wind power in the Pacific Northwest of the United States.
+        Wind power is increasingly becoming more popular as a renewable energy source, however the generation of wind power is not the most stable source of power; we don’t have 100% control over the availability of the power generation at an arbitrary time-scale. Ultimately, the availability of wind power is of course dependent on weather conditions. The good news is that weather forecasting is becoming a mature field of research. Huge increases in the availability of computational resources have allowed the generation of CFD based weather forecasts by harnessing supercomputers to perform simulations of the Earth’s atmosphere and weather at a global scale with extremely fine resolution. This project aims to demonstrate the ability to use these weather forecasts to predict the availability of wind power in the Pacific Northwest of the United States.
         ### Data Sources
         There are three sources of data for this project:
         * [Wind power production levels for the Pacific Northwest from the BPA Balancing Authority](https://transmission.bpa.gov/Business/Operations/Wind/twndbspt.aspx)
         * [Wind turbine metadata (geographic location, height, etc.) at the individual turbine level from the U.S. Wind Turbine Database](https://eerscmap.usgs.gov/uswtdb/data/)
         * [Atmospheric forecast simulation results from the Global Forecast System made available by the National Centers for Environmental Prediction](https://nomads.ncep.noaa.gov/)
 
-        The turbine metadata can be downloaded offline once and stored either on disk or in a database, since it is relatively small and doesn’t need to be updated. Both the power availability and forecasts will need to be incrementally downloaded since they are the live component of this project. The wind power level is a small dataset and can be downloaded and put into a database as it becomes available. The forecast data is a very large dataset that is updated four times each day. This data contains wind information across the entire planet at various altitudes at hourly increments. However, only the surface wind data at the turbine locations is required, so upon accessing the data from through the appropriate API, the wind data can be interpolated using bilinear interpolation to only the locations of the turbines. Only this information needs to be stored in the database, since it is what is required to make the predictions on power availability. For the purpose of visualizing the overall wind patterns in the Pacific Northwest, it may be required to store all of the surface wind data, but it would be restricted to the Pacific Northwest in order to reduce the database requirements.
+        Both the power availability and forecasts are incrementally downloaded since they are the live component of this project. The wind power level is a small dataset and is be downloaded and put into a MongoDB database as it becomes available. The forecast data is a very large dataset that is updated four times each day. This data contains wind information across the entire planet at various altitudes at hourly increments. However, only the wind data at the turbine locations is required, so upon accessing the data from the appropriate API, the wind data is interpolated using bilinear interpolation to only the locations of the turbines. This information is stored in the MongoDB database as well for the purpose of training a model to predict the power levels, as well as for making predictions of future power levels using the forecasted weather. For the purpose of visualizing the overall wind patterns in the Pacific Northwest, it is required to store all of the surface wind data, but it is restricted to the Pacific Northwest in order to reduce the MongoDB database size.
 
         > Note: All times in this project are in the UTC timezone.
         ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
@@ -263,29 +246,68 @@ def map_figure_info():
     """Returns information about the map figure"""
     return html.Div(children=[dcc.Markdown('''
         ### Weather Map
-        This weather map shows the wind speed at the turbines, as well as the surface wind streamlines. For the turbine winds, hovering over each individual turbine shows the rated power output and the hub height (the height above ground of the turbine hub), and the color of the circle on the map indicates the wind speed. The streamlines have dots along them that help indicate the wind speed. The closer the dots are together, the lower the wind-speed, and the larger the gap between the dots, the higher the wind speed. The slider along the bottom allows you to select a specific time to view.
+        This weather map shows the wind speed at the turbines, as well as the surface wind streamlines. For the turbine winds, hovering over each individual turbine shows the rated power output and the hub height (the height above ground of the turbine hub), and the color of the circle on the map indicates the wind speed. The slider along the bottom allows you to select a specific time to view.
 
+        ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
+
+
+def power_figure_info():
+    """Returns information about the power figure"""
+    return html.Div(children=[dcc.Markdown('''
+        ### Power Predictions
+        The wind and temperature information at each turbine can be used as a predictor for the power generation. The figure below shows the recent history of the power generation levels, alongside a 90% inter-quantile band for the wind speed at the turbine locations. It is clear that there is a correlation between the wind speed and the power levels, which is the mechanism by which predictions can be made. A linear model with polynomial feature generation and L2 regularization is fitted to most of data that is in the figure, with the most recent available portion being reserved as an evaluation for the model. The red line below shows the predictions of the model for the power generation, and the portion of the predictions that overal with the most recent power generation data can be used to assess how accurate the model may be in the future predictions, which are shown to the right of that in the figure.
+        ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
+
+
+def about_info():
+    """Returns information for the about section"""
+    return html.Div(children=[dcc.Markdown('''
+        ### About
+        This project was carried out by Maitreya Venkataswamy as a final project for the course DATA1050 (Data Engineering) at Brown University in the Fall semester of 2020. This project was inspired by these two papers: [paper 1](https://www.nrel.gov/docs/fy12osti/52233.pdf) and [paper 2](https://aip.scitation.org/doi/10.1063/1.4940208)
+        ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
+
+
+def implementation_info():
+    """Returns information for the implementation section"""
+    return html.Div(children=[dcc.Markdown('''
+        ### Implementation Details
+        As mentioned before, the data is incrementally downloaded by a Python program, that checks every hour for new data and downloads it. The power data from the BPA Balancing Authority is ready to be stored in the MongoDB database, since it is just a single number for every hour. The weather data from the GFS forecasts needs to be processed. The raw wind and temperature data is extracted from the downloaded data, and then interpolated to the turbine locations. The NumPy arrays that contain this information are serialized and stored in the MongoDB database, where each document in the database contains all the information associated with a specific day and hour. In addition, the surface wind is also stored in the database along with the latitude and longitude information required to interpret it.
+
+        The Web application that you are seeing now is implemented using Plotly Dash, and it fetches the required data from the MongoDB database whenever the user refreshed their webpage. So if you refresh this page now, the most recent data will be pulled from the database, the polynomial model will be retrained, an the webpage will be generated again. This is why the loading of page is a bit slow, since the model is always being retrained on the most recent historical data.
+        ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
+
+
+def no_data_info():
+    """Returns information about not having enough information yet to display"""
+    return html.Div(children=[dcc.Markdown('''
+        # Please wait a little bit...
+        The MongoDB database was probably just initialized and is currently empty. You will need to wait a bit (~30 min) for it to populate with initial data before using the application.
         ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
 
 
 def serve_layout():
     # Contruct and return the application layout
-    return html.Div([
-        description(),
-        map_figure_info(),
-
-        dcc.Graph(
-            id='map-figure',
-            figure=map_figure(),
-            style={'padding-left':'5%', 'padding-right':'5%'}
-        ),
-
-        dcc.Graph(
-            id='power-figure',
-            figure=power_figure(),
-            style={'padding-left':'5%'}
-        )
-    ], className='row', id='content')
+    try:
+        return html.Div([
+            description(),
+            map_figure_info(),
+            dcc.Graph(
+                id='map-figure',
+                figure=map_figure(),
+                style={'padding-left':'5%', 'padding-right':'5%'}
+            ),
+            power_figure_info(),
+            dcc.Graph(
+                id='power-figure',
+                figure=power_figure(),
+                style={'padding-left':'5%'}
+            ),
+            about_info()
+        ], className='row', id='content')
+    except Exception:
+        return html.Div([
+            no_data_info()
+        ], className='row', id='content')
 
 
 def main():
@@ -293,8 +315,11 @@ def main():
     # Set the layout server of the application
     app.layout = serve_layout
 
+    # Start the data acquisition program
+    Popen(['python', 'data_acquire.py'])
+
     # Run the application
-    app.run_server(debug=True)
+    app.run_server()
 
 
 if __name__ == "__main__":

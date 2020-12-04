@@ -66,7 +66,7 @@ def linear_model(data):
                       ("ss", StandardScaler()),
                       ("gs", GridSearchCV(
                             Ridge(random_state=0),
-                            param_grid={"alpha": np.logspace(-8, 0, 20)},
+                            param_grid={"alpha": np.logspace(-5, 5, 11)},
                             cv=KFold(n_splits=5)))])
 
     # Fit the model

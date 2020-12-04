@@ -14,6 +14,8 @@ from dateutil import rrule
 from functools import lru_cache
 from netCDF4 import Dataset
 from scipy.interpolate import RegularGridInterpolator
+import matplotlib.pyplot as plt
+
 
 from database import MongoDBInterface
 import utils
@@ -142,6 +144,23 @@ def _get_weather_data(date, hr, hr_base):
         data["T"] = np.zeros((np.sum(lat_idx), np.sum(lon_idx), len(HEIGHT_T)))
         for k, h in enumerate(HEIGHT_T):
             data["T"][:, :, k] = vars["tmp{}m".format(h)][hr, :, :].filled()[idx]
+
+        # Compute the streamlines
+        skp = 8
+        sp = plt.streamplot(data["lon"][::skp], data["lat"][::skp],
+                            data["u"][::skp, ::skp, 0], data["v"][::skp, ::skp, 0],
+                            density=4)
+        lines = sp.lines
+
+        # Combine the streamlines into a single list for plotting
+        pts = []
+        for pt in lines.get_segments():
+            pts.append(pt)
+            pts.append(np.array([np.nan, np.nan]))
+        pts = np.vstack(pts)
+
+        # Add the streamline points to the data
+        data["pts"] = pts
 
         # Return the data
         return data

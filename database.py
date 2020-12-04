@@ -11,6 +11,8 @@ import logging
 
 import utils
 
+ATLS_STR = "mongodb+srv://dash-app:wind-power@wind-power-predictor.yzev6.mongodb.net/<dbname>?retryWrites=true&w=majority"
+
 
 # Start logger
 logger = logging.Logger(__name__)
@@ -28,7 +30,7 @@ class MongoDBInterface:
         """Constructor for MongoDBInterface"""
         # Initialize the client
         logger.info("starting Python MongoDB client...")
-        client = pymongo.MongoClient()
+        client = pymongo.MongoClient(ATLAS_STR)
         logger.info("Python MongoDB client started")
 
         # Access the database
@@ -67,11 +69,13 @@ class MongoDBInterface:
         try:
             # Construct the record to upsert
             record = {"time": date_data,
-                      "u": _pack(data["u"]),
-                      "v": _pack(data["v"]),
-                      "T": _pack(data["T"]),
-                      "lat": _pack(data["lat"]),
-                      "lon": _pack(data["lon"])}
+                      #"u": _pack(data["u"]),
+                      #"v": _pack(data["v"]),
+                      #"T": _pack(data["T"]),
+                      "pts": _pack(data["pts"]),
+                      #"lat": _pack(data["lat"]),
+                      #"lon": _pack(data["lon"])
+                      }
 
             # Upsert the record
             res = self.db["weather"].replace_one(
@@ -137,11 +141,12 @@ class MongoDBInterface:
 
             # Parse the record into the data
             rec["time"] = record["time"]
-            rec["u"] = pickle.loads(record["u"])
-            rec["v"] = pickle.loads(record["v"])
-            rec["T"] = pickle.loads(record["T"])
-            rec["lat"] = pickle.loads(record["lat"])
-            rec["lon"] = pickle.loads(record["lon"])
+            #rec["u"] = pickle.loads(record["u"])
+            #rec["v"] = pickle.loads(record["v"])
+            #rec["T"] = pickle.loads(record["T"])
+            rec["pts"] = pickle.loads(record["pts"])
+            #rec["lat"] = pickle.loads(record["lat"])
+            #rec["lon"] = pickle.loads(record["lon"])
 
             # Add the parsed record to the data list
             data.append(rec)
