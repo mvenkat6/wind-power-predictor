@@ -87,7 +87,7 @@ def _get_power_data(date_time):
         return np.nan
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=1)
 def _download_weather_data(date, hr_base):
     """Downloads a single weather forecast dataset from the GFS system"""
     # Get the date as a string formatted as YYYYmmdd
@@ -101,8 +101,7 @@ def _download_weather_data(date, hr_base):
         return None
 
 
-@lru_cache(maxsize=128)
-def _get_weather_data(date, hr, hr_base):
+def _get_weather_data(date, hr, hr_base, close):
     """Get the weather data for a specific day and hour"""
     # Download the raw data frorm the GFS system in NetCDF4 format
     weather_data = _download_weather_data(date, hr_base)
@@ -147,9 +146,11 @@ def _get_weather_data(date, hr, hr_base):
 
         # Compute the streamlines
         skp = 8
+        fig = plt.figure()
         sp = plt.streamplot(data["lon"][::skp], data["lat"][::skp],
                             data["u"][::skp, ::skp, 0], data["v"][::skp, ::skp, 0],
                             density=4)
+        plt.close(fig)
         lines = sp.lines
 
         # Combine the streamlines into a single list for plotting
@@ -167,6 +168,10 @@ def _get_weather_data(date, hr, hr_base):
     except Exception:
         logger.error("cannot access variables from the downloaded data")
         return None
+    finally:
+        if close:
+            weather_data.close()
+            _download_weather_data.cache_clear()
 
 
 def _interp_data(turbine_data, var, lat, lon, height):
@@ -203,7 +208,7 @@ class DataAcquirer:
         # Begin the incremental download loop
         self._incremental_acquisition_loop()
 
-    def _download_and_process_data(self, date_time, hr, hr_base):
+    def _download_and_process_data(self, date_time, hr, hr_base, close):
         """Downloads and processes a single dataset"""
         # Determine the date and time of the data
         date_data = date_time + timedelta(hours=hr_base + hr)
@@ -213,7 +218,7 @@ class DataAcquirer:
                     date_data, date_time.date(), hr_base, hr))
 
         # Get the weather data
-        data = _get_weather_data(date_time.date(), hr, hr_base)
+        data = _get_weather_data(date_time.date(), hr, hr_base, close)
 
         # Check if the data was successfully downloaded
         if data is None:
@@ -252,7 +257,7 @@ class DataAcquirer:
                 # Iterate over the hours to use from each simulation
                 for hr in range(hrs_from_sim):
                     # Download and process the data
-                    if not self._download_and_process_data(date_time, hr, hr_base):
+                    if not self._download_and_process_data(date_time, hr, hr_base, hr == hrs_from_sim - 1):
                         break
 
     def _incremental_acquisition_loop(self, hrs_wait=1):
