@@ -46,7 +46,7 @@ def map_figure():
     fig = go.Figure()
 
     # Add data to the plot for multiple points in time
-    freq = 6
+    freq = 12
     for i in range(0, vel.shape[0], freq):
         # Add the streamlines
         fig.add_trace(
@@ -263,7 +263,9 @@ def about_info():
     """Returns information for the about section"""
     return html.Div(children=[dcc.Markdown('''
         ### About
-        This project was carried out by Maitreya Venkataswamy as a final project for the course DATA1050 (Data Engineering) at Brown University in the Fall semester of 2020. This project was inspired by these two papers: [paper 1](https://www.nrel.gov/docs/fy12osti/52233.pdf) and [paper 2](https://aip.scitation.org/doi/10.1063/1.4940208)
+        This project was carried out by Maitreya Venkataswamy as a final project for the course DATA1050 (Data Engineering) at Brown University in the Fall semester of 2020. This project was inspired by these two papers: [paper 1](https://www.nrel.gov/docs/fy12osti/52233.pdf) and [paper 2](https://aip.scitation.org/doi/10.1063/1.4940208).
+
+        The repository for all the software for this project is located [here](https://github.com/mvenkat6/wind-power-predictor), and it also contains some Jupyter Notebooks that detail the data downloading, ETL, visualization, and model training steps.
         ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
 
 
@@ -271,9 +273,9 @@ def implementation_info():
     """Returns information for the implementation section"""
     return html.Div(children=[dcc.Markdown('''
         ### Implementation Details
-        As mentioned before, the data is incrementally downloaded by a Python program, that checks every hour for new data and downloads it. The power data from the BPA Balancing Authority is ready to be stored in the MongoDB database, since it is just a single number for every hour. The weather data from the GFS forecasts needs to be processed. The raw wind and temperature data is extracted from the downloaded data, and then interpolated to the turbine locations. The NumPy arrays that contain this information are serialized and stored in the MongoDB database, where each document in the database contains all the information associated with a specific day and hour. In addition, the surface wind is also stored in the database along with the latitude and longitude information required to interpret it.
+        As mentioned before, the data is incrementally downloaded by a Python program, that checks every hour for new data and downloads it. The power data from the BPA Balancing Authority is ready to be stored in the MongoDB database, since it is just a single number for every hour. The weather data from the GFS forecasts needs to be processed. The raw wind and temperature data is extracted from the downloaded data, and then interpolated to the turbine locations. The NumPy arrays that contain this information are serialized and stored in the MongoDB database, where each document in the database contains all the information associated with a specific day and hour. In addition, streamlines are computed using the total wind information at the surface, and the resulting streamlines are also stored in the database.
 
-        The Web application that you are seeing now is implemented using Plotly Dash, and it fetches the required data from the MongoDB database whenever the user refreshed their webpage. So if you refresh this page now, the most recent data will be pulled from the database, the polynomial model will be retrained, an the webpage will be generated again. This is why the loading of page is a bit slow, since the model is always being retrained on the most recent historical data.
+        The program that inrementally downloads the data is hosted on an AWS EC2 instance, and is always running. The database is hosted on MongoDB Atlas, and is always accessible. The Web application that you are seeing now is implemented using Plotly Dash, and it fetches the required data from the MongoDB database whenever the user refreshed their webpage. So if you refresh this page now, the most recent data will be pulled from the database, the polynomial model will be retrained, an the webpage will be generated again. This is why the loading of page is a bit slow, since the model is always being retrained on the most recent historical data. This application is hosted on an AWS Elasticbeanstalk instance, which is always available.
         ''', className='eleven columns', style={'paddingLeft': '5%'})], className="row")
 
 
@@ -302,6 +304,7 @@ def serve_layout():
                 figure=power_figure(),
                 style={'padding-left':'5%'}
             ),
+            implementation_info(),
             about_info()
         ], className='row', id='content')
     except Exception:
